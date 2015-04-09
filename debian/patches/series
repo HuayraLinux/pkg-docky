@@ -1,0 +1,4 @@
+00bzr_logind-suspend-hibernate.diff
+use_dbussharp_2.patch
+fix_addin-manager.diff
+reset-timers.diff

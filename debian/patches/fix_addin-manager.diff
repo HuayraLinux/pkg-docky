@@ -1,0 +1,18 @@
+Description: fix crash when addin-manager fails to retrieve plugin instances
+--- docky-2.2.0.orig/Docky/Docky/PluginManager.cs
++++ docky-2.2.0/Docky/Docky/PluginManager.cs
+@@ -305,7 +305,13 @@ namespace Docky
+ 		/// </value>
+ 		public static IEnumerable<AbstractDockItemProvider> ItemProviders {
+ 			get { 
+-				return AddinManager.GetExtensionObjects (IPExtensionPath).OfType<AbstractDockItemProvider> ();
++				try {
++					return AddinManager.GetExtensionObjects (IPExtensionPath).OfType<AbstractDockItemProvider> ();
++				} catch (Exception e) {
++					Log<PluginManager>.Error ("{0}", e.Message);
++					Log<PluginManager>.Info (e.StackTrace);
++					return Enumerable.Empty<AbstractDockItemProvider> ();
++				}
+ 			}
+ 		}
+ 		

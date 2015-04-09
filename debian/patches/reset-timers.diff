@@ -1,0 +1,399 @@
+Description: Reset associated timer-id after a Timeout got removed or executed
+
+Index: docky-2.2.0/Docky.DBus/Docky.DBus/DockManagerDBusItem.cs
+===================================================================
+--- docky-2.2.0.orig/Docky.DBus/Docky.DBus/DockManagerDBusItem.cs
++++ docky-2.2.0/Docky.DBus/Docky.DBus/DockManagerDBusItem.cs
+@@ -303,8 +303,10 @@ namespace Docky.DBus
+ 		
+ 		public void Dispose ()
+ 		{
+-			if (timer > 0)
++			if (timer > 0) {
+ 				GLib.Source.Remove (timer);
++				timer = 0;
++			}
+ 			
+ 			update_time.Clear ();
+ 			
+Index: docky-2.2.0/Docky.Items/Docky.Painters/PagingDockPainter.cs
+===================================================================
+--- docky-2.2.0.orig/Docky.Items/Docky.Painters/PagingDockPainter.cs
++++ docky-2.2.0/Docky.Items/Docky.Painters/PagingDockPainter.cs
+@@ -52,14 +52,21 @@ namespace Docky.Painters
+ 				page = value;
+ 				OnPageChanged ();
+ 				
+-				if (slideTimer > 0)
++				if (slideTimer > 0) {
+ 					GLib.Source.Remove (slideTimer);
++					slideTimer = 0;
++				}
+ 				
+ 				slideCounter = 0;
+ 				slideTimer = GLib.Timeout.Add (10, delegate {
+ 					slideCounter++;
+ 					QueueRepaint ();
+-					return slideCounter < slideSteps;
++					if (slideCounter < slideSteps) {
++						return true;
++					} else {
++						slideTimer = 0;
++						return false;
++					}
+ 				});
+ 			}
+ 		}
+Index: docky-2.2.0/Docky.Services/Docky.Services/SystemService.cs
+===================================================================
+--- docky-2.2.0.orig/Docky.Services/Docky.Services/SystemService.cs
++++ docky-2.2.0/Docky.Services/Docky.Services/SystemService.cs
+@@ -110,7 +110,7 @@ namespace Docky.Services
+ 		void InitializeNetworkManager ()
+ 		{
+ 			NetworkConnected = true;
+-			if (nmTimer != 0) {
++			if (nmTimer > 0) {
+ 				GLib.Source.Remove (nmTimer);
+ 				nmTimer = 0;
+ 			}
+Index: docky-2.2.0/Docky.Widgets/Docky.Widgets/SearchEntry.cs
+===================================================================
+--- docky-2.2.0.orig/Docky.Widgets/Docky.Widgets/SearchEntry.cs
++++ docky-2.2.0/Docky.Widgets/Docky.Widgets/SearchEntry.cs
+@@ -183,19 +183,17 @@ namespace Docky.Widgets
+         {
+             ShowHideButtons();
+ 
+-            if(changed_timeout_id > 0) {
++            if (changed_timeout_id > 0) {
+                 GLib.Source.Remove (changed_timeout_id);
+                 changed_timeout_id = 0;
+             }
+ 
+             if (Ready)
+-                changed_timeout_id = GLib.Timeout.Add (25, OnChangedTimeout);
+-        }
+-
+-        private bool OnChangedTimeout()
+-        {
+-            OnChanged();
+-            return false;
++                changed_timeout_id = GLib.Timeout.Add (25, delegate {
++                    changed_timeout_id = 0;
++                    OnChanged ();
++                    return false;
++                });
+         }
+ 
+         private void UpdateStyle ()
+Index: docky-2.2.0/Docky/Docky/ConfigurationWindow.cs
+===================================================================
+--- docky-2.2.0.orig/Docky/Docky/ConfigurationWindow.cs
++++ docky-2.2.0/Docky/Docky/ConfigurationWindow.cs
+@@ -122,11 +122,10 @@ namespace Docky
+ 		
+ 		void StopTimer ()
+ 		{
+-			if (timer == 0)
+-				return;
+-			
+-			GLib.Source.Remove (timer);
+-			timer = 0;
++			if (timer > 0) {
++				GLib.Source.Remove (timer);
++				timer = 0;
++			}
+ 		}
+ 		
+ 		void StartTimer ()
+@@ -139,6 +138,9 @@ namespace Docky
+ 				bool finished = (DateTime.UtcNow - shown_time).TotalMilliseconds / AnimationTime > 1;
+ 				if (finished && !curtainDown)
+ 					Hide ();
++
++				if (finished)
++					timer = 0;
+ 				
+ 				return !finished;
+ 			});
+Index: docky-2.2.0/Docky/Docky/Docky.cs
+===================================================================
+--- docky-2.2.0.orig/Docky/Docky/Docky.cs
++++ docky-2.2.0/Docky/Docky/Docky.cs
+@@ -116,7 +116,7 @@ namespace Docky
+ 		
+ 		static void CheckComposite (uint timeout)
+ 		{
+-			if (checkCompositeTimer != 0) {
++			if (checkCompositeTimer > 0) {
+ 				GLib.Source.Remove (checkCompositeTimer);
+ 				checkCompositeTimer = 0;
+ 			}
+@@ -129,6 +129,8 @@ namespace Docky
+ 			}
+ 			
+ 			checkCompositeTimer = GLib.Timeout.Add (timeout * 1000, delegate {
++				checkCompositeTimer = 0;
++				
+ 				// no matter what, close any notify open
+ 				if (compositeNotify != null) {
+ 					compositeNotify.Close ();
+@@ -139,7 +141,6 @@ namespace Docky
+ 					compositeNotify = Log.Notify (Catalog.GetString ("Docky requires compositing to work properly. " +
+ 						"Certain options are disabled and themes/animations will look incorrect. "));
+ 				
+-				checkCompositeTimer = 0;
+ 				return false;
+ 			});
+ 		}
+Index: docky-2.2.0/Docky/Docky/Interface/AutohideManager.cs
+===================================================================
+--- docky-2.2.0.orig/Docky/Docky/Interface/AutohideManager.cs
++++ docky-2.2.0/Docky/Docky/Interface/AutohideManager.cs
+@@ -310,8 +310,10 @@ namespace Docky.Interface
+ 		#region IDisposable implementation
+ 		public void Dispose ()
+ 		{
+-			if (event_timer > 0)
++			if (event_timer > 0) {
+ 				GLib.Source.Remove (event_timer);
++				event_timer = 0;
++			}
+ 			
+ 			if (screen != null) {
+ 				screen.ActiveWindowChanged -= HandleActiveWindowChanged;
+Index: docky-2.2.0/Docky/Docky/Interface/CursorTracker.cs
+===================================================================
+--- docky-2.2.0.orig/Docky/Docky/Interface/CursorTracker.cs
++++ docky-2.2.0/Docky/Docky/Interface/CursorTracker.cs
+@@ -105,8 +105,10 @@ namespace Docky.Interface
+ 		{
+ 			uint length = resolution_senders.Any () ? HighResTimeout : LowResTimeout;
+ 			if (timer_speed != length) {
+-				if (timer > 0)
++				if (timer > 0) {
+ 					GLib.Source.Remove (timer);
++					timer = 0;
++				}
+ 				if (!UserArgs.NoPollCursor)
+ 					timer = GLib.Timeout.Add (length, OnTimerTick);
+ 				timer_speed = length;
+Index: docky-2.2.0/Docky/Docky/Interface/DockWindow.cs
+===================================================================
+--- docky-2.2.0.orig/Docky/Docky/Interface/DockWindow.cs
++++ docky-2.2.0/Docky/Docky/Interface/DockWindow.cs
+@@ -1571,8 +1571,10 @@ namespace Docky.Interface
+ 		
+ 		void DelayedSetSizeRequest ()
+ 		{
+-			if (size_request_timer > 0)
++			if (size_request_timer > 0) {
+ 				GLib.Source.Remove (size_request_timer);
++				size_request_timer = 0;
++			}
+ 			
+ 			size_request_timer = GLib.Timeout.Add ((uint) BaseAnimationTime.TotalMilliseconds, delegate {
+ 				size_request_timer = 0;
+@@ -1648,9 +1650,10 @@ namespace Docky.Interface
+ 			
+ 			//reset the timer to 0 so that the next time AnimatedDraw is called we fall back into
+ 			//the draw loop.
+-			if (animation_timer > 0)
++			if (animation_timer > 0) {
+ 				GLib.Source.Remove (animation_timer);
+-			animation_timer = 0;
++				animation_timer = 0;
++			}
+ 
+ 			// one final draw to clea out the end of previous animations
+ 			QueueDraw ();
+@@ -1975,6 +1978,8 @@ namespace Docky.Interface
+ 				GLib.Source.Remove (icon_size_timer);
+ 			
+ 			icon_size_timer = GLib.Timeout.Add (1000, delegate {
++				icon_size_timer = 0;
++
+ 				int dockWidth = DockWidth;
+ 				int maxWidth = Preferences.IsVertical ? monitor_geo.Height : monitor_geo.Width;
+ 				
+@@ -1995,7 +2000,7 @@ namespace Docky.Interface
+ 					MaxIconSize = Preferences.IconSize;
+ 				}
+ 				AnimatedDraw ();
+-				icon_size_timer = 0;
++
+ 				return false;
+ 			});
+ 		}
+@@ -2858,12 +2863,18 @@ namespace Docky.Interface
+ 		
+ 		public override void Dispose ()
+ 		{
+-			if (size_request_timer > 0)
++			if (size_request_timer > 0) {
+ 				GLib.Source.Remove (size_request_timer);
+-			if (animation_timer > 0)
++				size_request_timer = 0;
++			}
++			if (animation_timer > 0) {
+ 				GLib.Source.Remove (animation_timer);
+-			if (icon_size_timer > 0)
++				animation_timer = 0;
++			}
++			if (icon_size_timer > 0) {
+ 				GLib.Source.Remove (icon_size_timer);
++				icon_size_timer = 0;
++			}
+ 			
+ 			if (Menu != null)
+ 				Menu.Dispose ();
+Index: docky-2.2.0/StandardPlugins/BatteryMonitor/src/BatteryMonitorAbstractItem.cs
+===================================================================
+--- docky-2.2.0.orig/StandardPlugins/BatteryMonitor/src/BatteryMonitorAbstractItem.cs
++++ docky-2.2.0/StandardPlugins/BatteryMonitor/src/BatteryMonitorAbstractItem.cs
+@@ -193,8 +193,10 @@ namespace BatteryMonitor
+ 		public override void Dispose ()
+ 		{
+ 			DockServices.System.BatteryStateChanged -= HandleBatteryStateChanged;
+-			if (timer > 0)
++			if (timer > 0) {
+ 				GLib.Source.Remove (timer);
++				timer = 0;
++			}
+ 			base.Dispose ();
+ 		}
+ 	}
+Index: docky-2.2.0/StandardPlugins/Clippy/src/ClippyItem.cs
+===================================================================
+--- docky-2.2.0.orig/StandardPlugins/Clippy/src/ClippyItem.cs
++++ docky-2.2.0/StandardPlugins/Clippy/src/ClippyItem.cs
+@@ -159,8 +159,10 @@ namespace Clippy
+ 		
+ 		public override void Dispose ()
+ 		{
+-			if (timer > 0)
++			if (timer > 0) {
+ 				GLib.Source.Remove (timer);
++				timer = 0;
++			}
+ 			base.Dispose ();
+ 		}
+ 	}
+Index: docky-2.2.0/StandardPlugins/Clock/src/ClockDockItem.cs
+===================================================================
+--- docky-2.2.0.orig/StandardPlugins/Clock/src/ClockDockItem.cs
++++ docky-2.2.0/StandardPlugins/Clock/src/ClockDockItem.cs
+@@ -467,8 +467,10 @@ namespace Clock
+ 				ClockThemeSelector.instance = null;
+ 			}
+ 			painter.Dispose ();
+-			if (timer > 0)
++			if (timer > 0) {
+ 				GLib.Source.Remove (timer);
++				timer = 0;
++			}
+ 			base.Dispose ();
+ 		}
+ 	}
+Index: docky-2.2.0/StandardPlugins/GMail/src/GMailAtom.cs
+===================================================================
+--- docky-2.2.0.orig/StandardPlugins/GMail/src/GMailAtom.cs
++++ docky-2.2.0/StandardPlugins/GMail/src/GMailAtom.cs
+@@ -111,9 +111,10 @@ namespace GMail
+ 		
+ 		public void StopTimer ()
+ 		{
+-			if (UpdateTimer > 0)
++			if (UpdateTimer > 0) {
+ 				GLib.Source.Remove (UpdateTimer);
+-			UpdateTimer = 0;
++				UpdateTimer = 0;
++			}
+ 			
+ 			StopChecker ();
+ 		}
+Index: docky-2.2.0/StandardPlugins/NetworkManager/src/NetworkManagerDocklet.cs
+===================================================================
+--- docky-2.2.0.orig/StandardPlugins/NetworkManager/src/NetworkManagerDocklet.cs
++++ docky-2.2.0/StandardPlugins/NetworkManager/src/NetworkManagerDocklet.cs
+@@ -219,8 +219,10 @@ namespace NetworkManagerDocklet
+ 		
+ 		public override void Dispose ()
+ 		{
+-			if (timer > 0)
++			if (timer > 0) {
+ 				GLib.Source.Remove (timer);
++				timer = 0;
++			}
+ 			base.Dispose ();
+ 		}
+ 	}
+Index: docky-2.2.0/StandardPlugins/NetworkMonitor/src/NetworkMonitorDockItem.cs
+===================================================================
+--- docky-2.2.0.orig/StandardPlugins/NetworkMonitor/src/NetworkMonitorDockItem.cs
++++ docky-2.2.0/StandardPlugins/NetworkMonitor/src/NetworkMonitorDockItem.cs
+@@ -101,8 +101,10 @@ namespace NetworkMonitorDocklet
+ 		
+ 		public override void Dispose ()
+ 		{
+-			if (timer > 0)
++			if (timer > 0) {
+ 				GLib.Source.Remove (timer);
++				timer = 0;
++			}
+ 			
+ 			base.Dispose ();
+ 		}
+Index: docky-2.2.0/StandardPlugins/Timer/src/TimerDockItem.cs
+===================================================================
+--- docky-2.2.0.orig/StandardPlugins/Timer/src/TimerDockItem.cs
++++ docky-2.2.0/StandardPlugins/Timer/src/TimerDockItem.cs
+@@ -207,8 +207,10 @@ namespace Timer
+ 		
+ 		public void Toggle ()
+ 		{
+-			if (timer != 0)
++			if (timer > 0) {
+ 				GLib.Source.Remove (timer);
++				timer = 0;
++			}
+ 			
+ 			Running = !Running;
+ 			
+Index: docky-2.2.0/StandardPlugins/Weather/src/WeatherController.cs
+===================================================================
+--- docky-2.2.0.orig/StandardPlugins/Weather/src/WeatherController.cs
++++ docky-2.2.0/StandardPlugins/Weather/src/WeatherController.cs
+@@ -159,9 +159,10 @@ namespace WeatherDocklet
+ 		
+ 		public static void StopTimer ()
+ 		{
+-			if (UpdateTimer > 0)
++			if (UpdateTimer > 0) {
+ 				GLib.Source.Remove (UpdateTimer);
+-			UpdateTimer = 0;
++				UpdateTimer = 0;
++			}
+ 			Weather.StopReload (); 
+ 		}
+ 		
+Index: docky-2.2.0/StandardPlugins/WorkspaceSwitcher/src/WorkspaceSwitcherDockItem.cs
+===================================================================
+--- docky-2.2.0.orig/StandardPlugins/WorkspaceSwitcher/src/WorkspaceSwitcherDockItem.cs
++++ docky-2.2.0/StandardPlugins/WorkspaceSwitcher/src/WorkspaceSwitcherDockItem.cs
+@@ -229,12 +229,13 @@ namespace WorkspaceSwitcher
+ 				GLib.Source.Remove (update_timer);
+ 			
+ 			update_timer = GLib.Timeout.Add (250, delegate {
++				update_timer = 0;
++				
+ 				UpdateDesks ();
+ 				UpdateItem ();
+ 				
+ 				QueueRedraw ();
+ 
+-				update_timer = 0;
+ 				return false;
+ 			});
+ 		}
