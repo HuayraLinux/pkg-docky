@@ -1,3 +1,10 @@
+docky (2.2.1.1-1) unstable; urgency=medium
+
+  * Non-maintainer upload.
+  * new upstream version
+
+ -- Fernando Toledo <ragnarok@docksud.com.ar>  Fri, 25 Sep 2015 11:52:22 -0300
+
 docky (2.2.0-3) unstable; urgency=low
 
   * Backport two patchs from launchpad.

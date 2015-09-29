@@ -1,7 +1,7 @@
 Source: docky
 Section: x11
 Priority: optional
-Maintainer: Debian CLI Applications Team <pkg-cli-apps-team@lists.alioth.debian.org>
+Maintainer: Fernando Toledo <ragnarok@docksud.com.ar>
 Uploaders: Christopher James Halse Rogers <raof@ubuntu.com>, Rico Tzschichholz <ricotz@ubuntu.com>
 Build-Depends: debhelper (>= 7.0.50~),
  autotools-dev,
@@ -23,9 +23,11 @@ Build-Depends-Indep:
  libdbus-glib2.0-cil-dev (>= 0.5),
  libnotify-cil-dev,
  libwnck1.0-cil-dev,
+ libgkeyfile-cil-dev,
  libgtk2.0-dev,
  libglib2.0-dev,
- libgconf2-dev
+ libgconf2-dev,
+ libwnck-dev
 Standards-Version: 3.9.2
 Vcs-Git: git://git.debian.org/git/pkg-cli-apps/packages/docky.git
 Vcs-Browser: http://git.debian.org/?p=pkg-cli-apps/packages/docky.git
